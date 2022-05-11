@@ -7,6 +7,14 @@ library(stringr)
 
 #### Direct Emitter Data Import ---
 
+gwp <- tibble(
+  GHG_NAME = c("Carbon Dioxide","Biogenic Carbon dioxide","Methane","Nitrous Oxide"),
+  gwp_ar4_100 =c(1,1,25,298)
+)
+gwp2 <- tibble(
+  GHG_NAME = c("CARBON DIOXIDE","BIOGENIC CARBON DIOXIDE","METHANE","NITROUS OXIDE"),
+  gwp_ar4_100 =c(1,1,25,298)
+)
 # Reading in the total GHGRP direct emissions - we use this for steel also 
 
 GHG_data <- read_xlsx("data/AluminumFacilityEmissions_byGasbySubpart.xlsx",
@@ -32,18 +40,41 @@ c_data <- read_xlsx("data/AluminumFacilityEmissions_byGasbySubpart.xlsx",
                     col_names =TRUE) %>%
   rename(Facility = FACILITY_ID,
          Year = REPORTING_YEAR,
-         Combustion = GHG_QUANTITY)%>%
+         GHG_NAME = GHG_GAS_NAME)%>%
+  left_join(gwp, by = 'GHG_NAME')%>%
+  mutate(Combustion=GHG_QUANTITY*gwp_ar4_100)%>%
   group_by(Facility, Year)%>%
-  summarize(Combustion=sum(Combustion))
+  summarize(Combustion=sum(Combustion), .groups = "drop")
  
+s_data <- read_xlsx("data/AluminumFacilityEmissions_byGasbySubpart.xlsx",
+                    sheet="s_subpart_level_information",
+                    col_names =TRUE) %>%
+  rename(Facility = FACILITY_ID,
+         Year = REPORTING_YEAR)%>%
+  left_join(gwp, by = 'GHG_NAME')%>%
+  mutate(Lime=GHG_QUANTITY*gwp_ar4_100)%>%
+  group_by(Facility, Year)%>%
+  summarize(Lime=sum(Lime), .groups = "drop")
+
+q_data <- read_xlsx("data/AluminumFacilityEmissions_byGasbySubpart.xlsx",
+                     sheet="q_subpart_level_information",
+                     col_names =TRUE) %>%
+  rename(Facility = FACILITY_ID,
+         Year = REPORTING_YEAR)%>%
+           left_join(gwp, by = 'GHG_NAME')%>%
+           mutate(Steel=GHG_QUANTITY*gwp_ar4_100)%>%
+  group_by(Facility, Year)%>%
+  summarize(Steel=sum(Steel), .groups = "drop")
+
 tt_data <- read_xlsx("data/AluminumFacilityEmissions_byGasbySubpart.xlsx",
                     sheet="tt_subpart_level_information",
                     col_names =TRUE) %>%
   rename(Facility = FACILITY_ID,
-         Year = REPORTING_YEAR,
-         Waste = GHG_QUANTITY) %>%
+         Year = REPORTING_YEAR) %>%
+  left_join(gwp2, by = 'GHG_NAME')%>%
+  mutate(Waste=GHG_QUANTITY*gwp_ar4_100)%>%
   group_by(Facility, Year)%>%
-  summarize(Waste=sum(Waste))
+  summarize(Waste=sum(Waste), .groups = "drop")
 
          
 
@@ -180,6 +211,11 @@ st_fac <- read_xlsx("data/Qquestion_FLIGHT_IDs_Updated.xlsx",
                        EAF_CO2EMISSIONS_MT + EAF_DECARBVES_STACK_CO2EMIS_MT + 
                        DRF_CO2EMISSIONS_MT + NONRECOVCOB_CO2EMISSIONS_MT + 
                        TIF_CO2EMISSIONS_MT + SINTERPROC_CO2EMISSIONS_MT) %>%
+  rename(
+    Process_Coke = COKEPUSHOP_CO2EMISSIONS_MT,
+    Process_DRF = DRF_CO2EMISSIONS_MT,
+    Process_Taconite = TIF_CO2EMISSIONS_MT,
+    Process_Sinter = SINTERPROC_CO2EMISSIONS_MT)%>%
   
   left_join(GHG_data, by = c("Facility", "Year"))%>%
   filter(Year != 2010, Year !=2021)
@@ -193,12 +229,16 @@ st_fac <- read_xlsx("data/Qquestion_FLIGHT_IDs_Updated.xlsx",
   filter(EAF_CO2EMISSIONS_MT>0) 
   
   eaf_c <- left_join(eaf,c_data, by = c("Facility", "Year"))
-  eaf_tt <- left_join(eaf_c,tt_data, by = c("Facility", "Year")) %>%
+  eaf_q <- left_join(eaf_c,q_data, by = c("Facility", "Year"))
+  eaf_s <- left_join(eaf_q,s_data, by = c("Facility", "Year"))
+  eaf_tt <- left_join(eaf_s,tt_data, by = c("Facility", "Year")) %>%
     
   select(Facility,Name.x,Address,City, State,Zip, County, Longitude, Latitude, Naics,
-         Year,TRDGHG,Combustion,Process, Waste)%>%
+         Year,TRDGHG,Combustion,Steel,Process_Coke, Process_DRF, Process_Taconite,
+         Process_Sinter, Lime, Waste)%>%
     rename(Name = Name.x)%>%
     mutate(Waste = if_else(is.na(Waste),0,Waste),
+           Lime = if_else(is.na(Lime),0,Waste),
            Fac_Type="EAF")
   
   
@@ -207,12 +247,16 @@ st_fac <- read_xlsx("data/Qquestion_FLIGHT_IDs_Updated.xlsx",
   filter(BOPF_CO2EMISSIONS_MT>0)
   
   bof_c <- left_join(bof,c_data, by = c("Facility", "Year"))
-  bof_tt <- left_join(bof_c,tt_data, by = c("Facility", "Year")) %>%
+  bof_q <- left_join(bof_c,q_data, by = c("Facility", "Year"))
+  bof_s <- left_join(bof_q,s_data, by = c("Facility", "Year"))
+  bof_tt <- left_join(bof_s,tt_data, by = c("Facility", "Year")) %>%
     
     select(Facility,Name.x,Address,City, State,Zip, County, Longitude, Latitude, Naics,
-           Year,TRDGHG,Combustion,Process, Waste)%>%
+           Year,TRDGHG,Combustion,Steel,Process_Coke, Process_DRF, Process_Taconite,
+           Process_Sinter, Lime, Waste)%>%
     rename(Name = Name.x)%>%
     mutate(Waste = if_else(is.na(Waste),0,Waste),
+           Lime = if_else(is.na(Lime),0,Lime),
            Fac_Type= "BOF")
   
   
@@ -220,12 +264,16 @@ st_fac <- read_xlsx("data/Qquestion_FLIGHT_IDs_Updated.xlsx",
     filter(EAF_CO2EMISSIONS_MT==0, BOPF_CO2EMISSIONS_MT==0)
   
   oth_c <- left_join(oth,c_data, by = c("Facility", "Year"))
-  oth_tt <- left_join(oth_c,tt_data, by = c("Facility", "Year")) %>%
+  oth_q <- left_join(oth_c,q_data, by = c("Facility", "Year"))
+  oth_s <- left_join(oth_q,s_data, by = c("Facility", "Year"))
+  oth_tt <- left_join(oth_s,tt_data, by = c("Facility", "Year")) %>%
     
     select(Facility,Name.x,Address,City, State,Zip, County, Longitude, Latitude, Naics,
-           Year,TRDGHG,Combustion,Process, Waste)%>%
+           Year,TRDGHG,Combustion,Steel,Process_Coke, Process_DRF, Process_Taconite,
+           Process_Sinter, Lime, Waste)%>%
     rename(Name = Name.x)%>%
     mutate(Waste = if_else(is.na(Waste),0,Waste),
+           Lime = if_else(is.na(Lime),0,Waste),
           Fac_Type = "Other")
   
   Iron_steel_dat <- rbind(eaf_tt,bof_tt,oth_tt) %>%

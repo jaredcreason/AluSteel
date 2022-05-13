@@ -172,7 +172,8 @@ data4 <- left_join(data3,al_tt, by = c("Facility", "Year"))
 al_data <- data4 %>%
   filter(Year != 2010) %>%
   select(Facility,Name,Address,City, State,Zip, County, Longitude, Latitude, Naics,
-         Year,TRDGHG,Combustion,Process,Elec_Gen,Waste)
+         Year,TRDGHG,Combustion,Process,Elec_Gen,Waste)%>%
+  mutate(unit = "Mt CO2e")
 write.csv(al_data, "output/aluminum_data_ghgrp.csv")
 
 #
